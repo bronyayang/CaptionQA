@@ -1,0 +1,77 @@
+ {
+    "Structural Elements": {
+      "Layout": {
+        "Key structural elements": ["title", "headers", "footnotes", "page number"],
+        "Hierarchical structure": ["section", "subsection"],
+        "Columns": ["single-column", "multi-column layout"]
+      },
+      "Spatial Relationships": {
+        "Alignment": ["centered", "left-aligned", "right-aligned"],
+        "Overlapping elements": ["text over images", "legends over charts"],
+        "Relative positioning": ["proximity of labels to corresponding elements"]
+      }
+    },
+    "Content-Level Evaluation": {
+      "Text-Content": {
+        "Textual information": ["extracted text matches the image"],
+        "Completeness": ["missing text", "partial text", "missing values"],
+        "Formatting": ["bold", "italic", "underline", "font size"],
+        "Style differentiation": ["captions vs. main body text"],
+        "Accurate recognition of numbers": ["percentages", "decimal points"],
+        "Units and scales": ["10 km vs. 10k"],
+        "Symbols and special characters": ["currency symbols", "math symbols", "emoji"]
+      },
+      "Visual Elements": {
+        "Presence and identification of figures": ["charts", "diagrams", "icons"],
+        "Metadata of figures": ["page number of figures", "continuation of figures"]
+      }
+    },
+    "Chart-Specific Elements": {
+      "Chart Types": ["bar chart", "line chart", "pie chart", "scatter plot"],
+      "Axes and Labels": {
+        "Presence of x-axis and y-axis labels": null,
+        "Axis scale": ["linear", "logarithmic"],
+        "Units of measurement": ["time", "percentage"]
+      },
+      "Legends": null,
+      "Data Points": {
+        "Correctness of data points": null,
+        "Completeness of data point descriptions": null,
+        "Trend identification": ["upward trend", "downward trend"]
+      }
+    },
+    "Table-Specific Elements": {
+      "Table Structure": {
+        "Presence of headers": ["column headers", "row headers"],
+        "Merged cells": ["multi-row cells", "multi-column cells"],
+        "Gridlines": ["presence of borders", "absence of borders"]
+      },
+      "Content": {
+        "Completeness of table content": ["missing cells", "missing rows/columns"],
+        "Correctness of textual and numeric content in cells": null,
+        "Formatting": ["bold headers", "colored cells for emphasis"],
+        "Units in cells": ["USD", "kg"]
+      },
+      "Relationships": {
+        "Cross-references": ["footnotes or notes referring to specific cells"]
+      }
+    },
+    "Diagram-Specific Elements": {
+      "Types of Diagrams": ["flowcharts", "network diagrams", "UML diagrams", "Venn diagrams"],
+      "Components": {
+        "Nodes": ["shapes", "labels"],
+        "Connections": ["nodes", "type of connections", "labels", "symbols"]
+      },
+      "Relationships": {
+        "Directionality of connections": ["one-way", "bidirectional"],
+        "Hierarchical structure": ["parent-child relationships in tree diagrams"]
+      }
+    },
+    "Domain-Specific Evaluation": {
+      "Domain-Specific Information": {
+        "Financial reports": ["correct identification of key metrics such as revenue, profit"],
+        "Scientific papers": ["correct recognition of equations, symbols"],
+        "Legal documents": ["correct extraction of clauses, dates"]
+      }
+    }
+  }

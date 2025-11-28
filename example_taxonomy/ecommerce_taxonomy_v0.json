@@ -1,0 +1,97 @@
+{
+    "Product-Level Information": {
+      "Product Category": ["laptop", "running shoes"],
+      "Product Attributes": {
+        "Color": ["red", "matte black"],
+        "Dimensions": ["12 inches tall"],
+        "Size": ["set of 3 mugs", "a dozen"],
+        "Material": ["leather", "stainless steel"],
+        "Shape": ["rectangular", "oval"],
+        "Texture": ["smooth finish", "rough surface"],
+        "Weight": ["lightweight backpack"]
+      },
+      "Product Condition": {
+        "New vs. used appearance": ["brand new", "slightly worn"],
+        "Defects or wear": ["minor scratches"]
+      }
+    },
+    "Contextual and Scene Information": {
+      "Usage Context": {
+        "Indoor vs. outdoor setting": ["outdoor garden furniture"],
+        "Lifestyle depiction": ["ideal for office use", "perfect for outdoor camping"],
+        "Human interaction": ["worn by a model", "held by a hand"],
+        "Environmental cues": ["in a kitchen", "on a desk"]
+      },
+      "Completeness of Scene": {
+        "Completeness of product display": ["full product shown", "partially shown"],
+        "Supporting objects": ["props", "background elements"],
+        "Scene cleanliness": ["cluttered", "minimalistic background"]
+      }
+    },
+    "Visual Appearance and Presentation": {
+      "Image Quality": {
+        "Blurriness": null,
+        "Lighting": ["bright", "natural light", "shadows"],
+        "Reflections": ["glare on metallic surfaces"]
+      },
+      "Background": {
+        "Plain background": ["white", "black"],
+        "Styled background": ["lifestyle images with props"],
+        "Transparency": ["images with transparent backgrounds"]
+      },
+      "Perspective and Angles": {
+        "Front view, side view, top view, or angled shot": null,
+        "Close-up shots of key features": ["zoomed-in details"],
+        "360-degree view or multi-angle shots": ["implied by multiple images"]
+      }
+    },
+    "Functional Information": {
+      "Intended Use": {
+        "Functionality": ["multi-purpose tool", "designed for running"],
+        "Usability": ["easy to use", "one-click operation"],
+        "Special features": ["waterproof", "wireless connectivity"]
+      },
+      "Performance Characteristics": {
+        "Capacity": ["16GB RAM", "1TB storage"],
+        "Durability": ["scratch-resistant", "long-lasting"],
+        "Safety": ["child-safe material", "non-toxic"]
+      },
+      "Compatibility": {
+        "Compatibility with other products": ["compatible with iOS and Android"],
+        "Accessories included or sold separately": ["includes charging cable"]
+      }
+    },
+    "Brand and Marketing Information": {
+      "Branding": {
+        "Visible logo or brand name": null,
+        "Trademark symbols": ["®", "™"],
+        "Brand-specific design elements": ["signature patterns"],
+        "Model/version identification": ["iPhone 14 Pro"]
+      },
+      "Promotional Elements": {
+        "Sale indicators": ["50% off tag"],
+        "Certifications or labels": ["FDA-approved", "eco-friendly"],
+        "Awards and recognitions": ["Best product of the year"]
+      }
+    },
+    "Textual Elements in Image": {
+      "Embedding Text Recognition": {
+        "Product name or description": null,
+        "Price tags or discount labels": null,
+        "Usage instructions or warnings": ["handle with care"],
+        "Slogans or promotional text": null
+      }
+    },
+    "Packaging and Accessories": {
+      "Packaging Description": {
+        "Box, bag, or wrapper": ["premium gift box"],
+        "Product labels on packaging": ["organic", "recyclable"],
+        "Packaging design": ["minimalistic", "vintage style"]
+      },
+      "Accessories": {
+        "Listing of included accessories": ["comes with charger and earphones"],
+        "Identification of main product vs. accessories": ["distinguishing primary product from props"]
+      }
+    }
+  }
+  

@@ -1,0 +1,77 @@
+{
+    "Object Existence": {
+      "Object presence": null,
+      "Use of named entities": null
+    },
+    "Attribute": {
+      "Color": null,
+      "Shape": null,
+      "Size": null,
+      "Textual": null,
+      "Material": null,
+      "State": ["open", "closed", "whole", "broken"],
+      "Count/Quantity": ["singular", "plural", "exact count", "range estimate"],
+      "Part-Whole Relationships": ["wheels of a car", "branches of a tree"]
+    },
+    "Spatial": {
+      "Relationship": {
+        "Positional relationships": ["above", "below", "beside"],
+        "Orientation": ["facing forward", "tilted"],
+        "Containment": ["inside", "outside"],
+        "Attachment": ["connected", "detached"]
+      },
+      "Proximity": {
+        "Distance between objects": ["near", "far"],
+        "Clustering": ["grouped", "scattered"]
+      },
+      "Layout": {
+        "Scene composition": ["foreground", "background"],
+        "Symmetry/asymmetry": null,
+        "Overlapping/occlusion": null
+      }
+    },
+    "Action and Interaction": {
+      "Object-Object Interaction": {
+        "Contact": ["collision", "gears rotation"],
+        "Functional interaction": ["key opening the door"]
+      },
+      "Object-Human Interaction": {
+        "Human activity": ["running", "sitting"],
+        "Interaction context": ["playing sports", "using tools"]
+      },
+      "Human-Human Interaction": {
+        "Nonverbal communication": ["gestures", "body language"],
+        "Collaborative and social dynamics": ["teamwork", "group interaction"],
+        "Physical and affective interaction": ["hugs", "handshakes"]
+      },
+      "Temporal State": {
+        "Indication of motion": ["blurred objects", "motion trails"]
+      }
+    },
+    "Scene-Level Evaluation": {
+      "Environment/Setting": {
+        "Environment type": ["natural", "urban environment"],
+        "Location type": ["indoor", "outdoor", "semi-indoor", "semi-outdoor"]
+      },
+      "Weather and Lighting": {
+        "Weather conditions": ["sunny", "rainy", "foggy"],
+        "Time of day": ["daytime", "night", "dusk"],
+        "Shadows and reflections": null,
+        "Light source directionality": null
+      }
+    },
+    "Hallucination": {
+      "Object Evaluation": {
+        "Object absence": ["likely but absent objects appropriately omitted"],
+        "Object ambiguity": ["wolf and husky"],
+        "Occluded objects misinterpretation": null
+      },
+      "Scene Evaluation": {
+        "Scene misinterpretation": ["snow-covered vs. white sand beach"],
+        "Confounding elements": ["handle reflections", "shadows", "background clutter"]
+      },
+      "Action Evaluation": {
+        "Implied actions": ["man running when the person is stationary"]
+      }
+    }
+}

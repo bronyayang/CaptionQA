@@ -1,0 +1,98 @@
+{
+    "Perception": {
+      "Object Recognition": {
+        "Object identification": ["cup", "door handle"],
+        "Object category": ["furniture", "tools", "appliances"]
+      },
+      "Attribute": {
+        "Color": null,
+        "Shape": null,
+        "Size": null,
+        "Material": null,
+        "State": null,
+        "Orientation": null
+      },
+      "Relationships": {
+        "Positional relationships": ["on top of", "next to"],
+        "Containment": ["object inside a box"],
+        "Attachment": ["tool attached to a robotic arm"],
+        "Occlusion": ["partially visible object behind another object"]
+      },
+      "Interaction": {
+        "Contact": ["robot holding a bottle"],
+        "Manipulation": ["grasping", "pushing", "pulling"],
+        "Proximity": ["object within reach", "object far from reach"]
+      }
+    },
+    "Spatial and Environment Context": {
+      "Spacial": {
+        "Proximity": ["near the edge of the table"],
+        "Distance estimation": ["approximately 2 meters away"],
+        "Perspective": ["view from a high angle", "low-angle view"]
+      },
+      "Environmental Description": {
+        "Indoor vs. outdoor": ["indoor kitchen", "outdoor garden"],
+        "Room type": ["living room", "office", "workshop"],
+        "Surroundings": ["surrounded by shelves", "in an open space"],
+        "Surface properties": ["wooden floor", "metal surface"]
+      }
+    },
+    "Activity and Task Context": {
+      "Task Identification": {
+        "Navigation tasks": ["robot navigating a hallway"],
+        "Object manipulation tasks": ["picking up a tool"],
+        "Cleaning tasks": ["sweeping debris"],
+        "Inspection tasks": ["inspecting a pipe for damage"]
+      },
+      "Implied Actions": {
+        "Action in progress": ["robot approaching a table"],
+        "Action completed": ["door successfully opened"],
+        "Task outcome": ["object successfully placed in the bin"]
+      },
+      "Human-Robot Interaction": {
+        "Human presence": ["person standing nearby"],
+        "Interaction type": ["handing an object to the robot"],
+        "Collaborative actions": ["robot assisting a person with a task"]
+      }
+    },
+    "Scene Dynamics": {
+      "Motion and Kinematics": {
+        "Robot motion": ["robot moving forward", "robot arm rotating"],
+        "Object motion": ["ball rolling on the floor"],
+        "Velocity estimation": ["object moving quickly", "slow movement"]
+      },
+      "Temporal Information": {
+        "Time-specific context": ["morning light coming through the window"],
+        "Sequential actions": ["after opening the drawer, picking up the tool"]
+      }
+    },
+    "Sensor and Embodiment Information": {
+      "Sensor-Specific Features": {
+        "Camera type": ["RGB", "depth", "thermal"],
+        "Depth perception": ["distance to object measured by depth sensor"],
+        "Field of view": ["wide-angle view", "narrow focus on object"],
+        "Sensor artifacts": ["glare on metallic surface", "low-light noise"]
+      },
+      "Robot Embodiment": {
+        "Robot components in frame": ["robot arm", "gripper"],
+        "Self-awareness": ["robot's shadow visible", "robot base in view"],
+        "Tool attachment": ["screwdriver attached to gripper"]
+      }
+    },
+    "Functional and Semantic Understanding": {
+      "Affordance Recognition": {
+        "Affordances of objects": ["graspable handle", "pourable bottle"],
+        "Tool usability": ["wrench ready to tighten a bolt"],
+        "Interaction potential": ["button pressable by robot finger"]
+      },
+      "Semantic Completeness": {
+        "Completeness of scene description": ["all key objects and actions described"],
+        "Avoidance of hallucination": ["no mention of non-existent objects or actions"]
+      },
+      "Contextual Relevance": {
+        "Task-specific relevance": ["focusing on objects necessary for the task"],
+        "Importance weighting": ["emphasizing key objects over background elements"]
+      }
+    }
+  }
+  
