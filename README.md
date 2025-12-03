@@ -7,7 +7,7 @@
 ## 🔥 News
 
 - **[11/27/2025]** 🎉 [ArXiv paper](https://arxiv.org/abs/2511.21025) released!
-- **[11/27/2025]** 📝 Blog post [English]() and [Chinese](https://zhuanlan.zhihu.com/p/1975613905834357034) released!
+- **[11/27/2025]** 📝 Blog post [English](https://huggingface.co/blog/Borise/rethinking-mm-from-industry-view) and [Chinese](https://zhuanlan.zhihu.com/p/1975613905834357034) released!
 - **[11/27/2025]** 📊 [Validation set](https://huggingface.co/datasets/Borise/CaptionQA) released on HuggingFace!
 - **[11/27/2025]** 💻 Draft code released! (Cleaning in progress - not yet compatible with HuggingFace dataset, meanwhile, please star our repo)
 
@@ -16,9 +16,10 @@
 ## 📎 Resources
 
 - 📄 **Paper**: [CaptionQA: Is Your Caption as Useful as the Image Itself?](https://arxiv.org/abs/2511.21025)
+- 📝 **Blog (English)**: [Rethinking Multimodality from an Industry Perspective](https://huggingface.co/blog/Borise/rethinking-mm-from-industry-view)
 - 📝 **Blog (Chinese / 中文博客)**: [从产业视角重新审视多模态：Caption这个多模态任务远超你的想象](https://zhuanlan.zhihu.com/p/1975613905834357034)
 - 🤗 **Dataset on HuggingFace**: [Borise/CaptionQA](https://huggingface.co/datasets/Borise/CaptionQA)
-- 🏆 **Leaderboard**: _coming soon_
+- 🏆 **Leaderboard**: [captionqa.github.io/website](https://captionqa.github.io/website)
 
 ---
 
@@ -101,7 +102,15 @@ We will run:
 
 Results are typically returned within 3–5 days, depending on queue time.
 
-Your submission will be added to the official leaderboard once verified.
+### Step 4: Add your results to the leaderboard
+
+Once you receive your evaluation results and are satisfied with them, you can add your model to the public leaderboard:
+
+1. Fork the [leaderboard website repository](https://github.com/CaptionQA/website)
+2. Add your model information and scores to the leaderboard
+3. Submit a Pull Request
+
+This allows you to control how and when your results are made public.
 
 ---
 
