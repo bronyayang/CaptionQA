@@ -63,6 +63,47 @@ python caption.py --list-prompts
 > **Note**: The current code is under active development and is not yet fully compatible with the HuggingFace dataset format. Stay tuned for updates!
 
 ---
+5. **Leaderboard Submission (Full Benchmark Evaluation)**
+
+### Step 1: Run your model on the public validation subset
+
+This ensures:
+
+- correct caption format,
+
+- correct mapping between image_id and caption,
+
+- predictable caption length / style.
+
+### Step 2: Prepare your caption file
+Format can be JSONL or CSV, with the following fields:
+
+| Field      | Description                           |
+| ---------- | ------------------------------------- |
+| `image_id` | The image identifier from the dataset |
+| `caption`  | Your model-generated caption          |
+
+
+### Step 3: Submit your captions
+Send your caption file to:
+
+captionqa.team@gmail.com
+
+We will run:
+
+- full taxonomy-aligned caption evaluation
+
+- all domain subsets
+
+- cross-domain utility metrics
+
+- final leaderboard aggregation
+
+Results are typically returned within 3–5 days, depending on queue time.
+
+Your submission will be added to the official leaderboard once verified.
+
+---
 
 ## 📚 Citation
 
@@ -78,3 +119,4 @@ If you use CaptionQA in your work, please cite:
       primaryClass={cs.CV},
       url={https://arxiv.org/abs/2511.21025}, 
 }
+
