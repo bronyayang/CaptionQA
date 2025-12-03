@@ -64,7 +64,7 @@ python caption.py --list-prompts
 > **Note**: The current code is under active development and is not yet fully compatible with the HuggingFace dataset format. Stay tuned for updates!
 
 ---
-5. **Leaderboard Submission (Full Benchmark Evaluation)**
+## ✨ Leaderboard Submission (Full Benchmark Evaluation)
 
 ### Step 1: Run your model on the public validation subset
 
