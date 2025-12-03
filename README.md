@@ -102,16 +102,6 @@ We will run:
 
 Results are typically returned within 3–5 days, depending on queue time.
 
-### Step 4: Add your results to the leaderboard
-
-Once you receive your evaluation results and are satisfied with them, you can add your model to the public leaderboard:
-
-1. Fork the [leaderboard website repository](https://github.com/CaptionQA/website)
-2. Add your model information and scores to the leaderboard
-3. Submit a Pull Request
-
-This allows you to control how and when your results are made public.
-
 ---
 
 ## 📚 Citation
