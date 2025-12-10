@@ -4,6 +4,7 @@ from io import BytesIO
 import os
 import argparse
 from pathlib import Path
+from PIL import Image
 
 def load_json(json_file):
     with open(json_file) as f:
@@ -20,6 +21,62 @@ def encode_image(image):
         byte_data = output_buffer.getvalue()
     base64_str = base64.b64encode(byte_data).decode("utf-8")
     return base64_str
+
+
+def resize_image_for_api(image_path: str, max_size_bytes: int = 5 * 1024 * 1024) -> str:
+    """
+    Resize image if needed to fit within API size limits and return base64 encoded string.
+    
+    Args:
+        image_path: Path to the image file
+        max_size_bytes: Maximum size in bytes (default 5MB for Claude)
+    
+    Returns:
+        Base64 encoded string of the (possibly resized) image
+    """
+    # Check original file size
+    file_size = os.path.getsize(image_path)
+    
+    if file_size <= max_size_bytes:
+        # File is small enough, just encode it
+        return encode_image(image_path)
+    
+    # Need to resize - load and compress
+    img = Image.open(image_path)
+    
+    # Convert to RGB if necessary (for JPEG encoding)
+    if img.mode in ('RGBA', 'P'):
+        img = img.convert('RGB')
+    
+    # Try progressively smaller sizes until under limit
+    quality = 85
+    scale = 1.0
+    
+    while True:
+        # Resize if needed
+        if scale < 1.0:
+            new_size = (int(img.width * scale), int(img.height * scale))
+            resized = img.resize(new_size, Image.Resampling.LANCZOS)
+        else:
+            resized = img
+        
+        # Encode to JPEG
+        output_buffer = BytesIO()
+        resized.save(output_buffer, format="JPEG", quality=quality)
+        byte_data = output_buffer.getvalue()
+        
+        if len(byte_data) <= max_size_bytes:
+            return base64.b64encode(byte_data).decode("utf-8")
+        
+        # Reduce quality or scale
+        if quality > 50:
+            quality -= 10
+        else:
+            scale *= 0.8
+        
+        if scale < 0.1:
+            # Give up and return what we have
+            return base64.b64encode(byte_data).decode("utf-8")
 
 def check_question_counts(json_file_path, threshold=40):
     # Read the JSON file

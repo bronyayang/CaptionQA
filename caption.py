@@ -6,8 +6,11 @@ from tqdm import tqdm
 import time
 import random
 import openai
+import tempfile
 from typing import Tuple, Optional, Any, List, Dict
-from pipeline.utils import load_json, encode_image, resize_image_for_api
+from PIL import Image
+from datasets import load_dataset
+from pipeline.utils import load_json, encode_image
 from pipeline.api import (
     AMD_openai_client, AMD_openai_call, AMD_llama_client,
     AMD_gemini_client, AMD_gemini_call,
@@ -17,35 +20,14 @@ from pipeline.api import (
 )
 from caption_prompt import CAPTION_PROMPTS, get_prompt, create_taxonomy_prompts, list_available_prompts
 
+# Available domain splits in the dataset
+DOMAIN_SPLITS = ["natural", "document", "ecommerce", "embodiedai"]
 
-def discover_input_items(benchmark_folder: str) -> List[Tuple[str, List[str], bool]]:
-    """Discover both single images and image folders."""
-    image_root_path = os.path.abspath(benchmark_folder)
-    input_items = []  # List of tuples: (key, image_paths, is_multi)
-    
-    for item in os.listdir(image_root_path):
-        item_path = os.path.join(image_root_path, item)
-        
-        if os.path.isfile(item_path) and item.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
-            # Single image file
-            input_items.append((item, [item_path], False))
-        elif os.path.isdir(item_path):
-            # Directory containing multiple images
-            folder_images = []
-            for img_file in os.listdir(item_path):
-                if img_file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
-                    folder_images.append(os.path.join(item_path, img_file))
-            
-            if folder_images:  # Only add if folder contains images
-                folder_images.sort()  # Sort images within folder
-                input_items.append((item, folder_images, True))
-    
-    input_items.sort(key=lambda x: x[0])  # Sort by key name
-    return input_items
 
 def _sleep_backoff(attempt: int, base: float = 0.5, factor: float = 2.0, jitter: float = 0.25) -> None:
     """Sleep with exponential backoff and jitter."""
     time.sleep(base * (factor ** attempt) + random.uniform(0, max(0.0, jitter)))
+
 
 def detect_model_backend(model: str) -> str:
     """Detect which API backend to use based on model name."""
@@ -63,6 +45,34 @@ def detect_model_backend(model: str) -> str:
         return 'llama'
     else:
         return 'openai'
+
+
+def load_captionqa_dataset(dataset_name: str, split: str):
+    """
+    Load CaptionQA dataset from HuggingFace.
+    
+    Args:
+        dataset_name: HuggingFace dataset name (default: "Borise/CaptionQA")
+        split: Domain split to use: "natural", "document", "ecommerce", "embodiedai", or "all"
+    
+    Returns:
+        HuggingFace dataset object
+    """
+    print(f"Loading dataset {dataset_name} (split: {split})...")
+    
+    # Load the specified split directly
+    dataset = load_dataset(dataset_name, split=split)
+    
+    print(f"Loaded {len(dataset)} entries")
+    return dataset
+
+
+def save_pil_image_to_temp(pil_image: Image.Image, suffix: str = ".jpg") -> str:
+    """Save a PIL image to a temporary file and return the path."""
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    pil_image.save(temp_file.name)
+    return temp_file.name
+
 
 def generate_caption(
     client: Any,
@@ -204,20 +214,15 @@ def generate_caption(
     
     return None
 
+
 def caption_images(args):
-    """Main function to caption images."""
+    """Main function to caption images from HuggingFace dataset."""
     start_time = time.time()
     
-    # Discover input items
-    input_items = discover_input_items(args.benchmark_folder)
+    # Load dataset from HuggingFace
+    dataset = load_captionqa_dataset(args.dataset, args.split)
     
-    # Print summary of discovered items
-    print(f"Discovered {len(input_items)} items to process:")
-    for key, image_paths, is_multi in input_items:
-        if is_multi:
-            print(f"  📁 {key}: {len(image_paths)} images (multi-view folder)")
-        else:
-            print(f"  🖼️  {key}: single image")
+    print(f"Processing {len(dataset)} images from {args.dataset} ({args.split} split)")
 
     # Initialize client based on model backend
     backend = detect_model_backend(args.model)
@@ -242,13 +247,13 @@ def caption_images(args):
     if os.path.exists(args.output_path):
         with open(args.output_path, 'r') as f:
             results = json.load(f)
-        print(f"Loaded existing results from {args.output_path}")
+        print(f"Loaded existing results from {args.output_path} ({len(results)} captions)")
     else:
         results = {}
     
-    # Determine which prompt to use (single prompt only)
+    # Determine which prompt to use
     if args.taxonomy:
-        # Use external taxonomy file - take first prompt
+        # Use external taxonomy file
         taxonomy = load_json(args.taxonomy)
         if args.prompt == "TAXONOMY_DEFAULT":
             tax_prompts = create_taxonomy_prompts(taxonomy, prompt_name="default")
@@ -266,17 +271,46 @@ def caption_images(args):
         print(f"Using prompt: {args.prompt}")
         print(prompt_text)
     
-    # Process each input item
-    for key, image_paths, is_multi in tqdm(input_items, desc="Processing Items"):
-        
-        # Skip if already processed and not overwriting
-        if key in results and not args.overwrite:
-            print(f"Skipping {key} (already processed, use --overwrite to regenerate)")
+    # Track temporary files for cleanup
+    temp_files = []
+    
+    # Process each entry in the dataset
+    for entry in tqdm(dataset, desc="Captioning"):
+        # Get image ID (e.g., "nat_001", "doc_042")
+        image_id = entry.get('id')
+        if image_id is None:
             continue
         
-        # Modify prompt for multi-view images
+        image_key = str(image_id)
+        
+        # Skip if already processed and not overwriting
+        if image_key in results and not args.overwrite:
+            continue
+        
+        # Get images from the dataset entry
+        images = entry.get('images', [])
+        if not images:
+            print(f"Skipping {image_key} (no images)")
+            continue
+        
+        # Save PIL images to temporary files for API calls
+        image_paths = []
+        for img in images:
+            if isinstance(img, Image.Image):
+                temp_path = save_pil_image_to_temp(img)
+                image_paths.append(temp_path)
+                temp_files.append(temp_path)
+            elif isinstance(img, str):
+                # Already a path
+                image_paths.append(img)
+        
+        if not image_paths:
+            print(f"Skipping {image_key} (could not process images)")
+            continue
+        
+        # Modify prompt for multi-image entries
         current_prompt = prompt_text
-        if is_multi and len(image_paths) > 1:
+        if len(image_paths) > 1:
             if 'MULTIVIEW' in CAPTION_PROMPTS:
                 current_prompt = get_prompt('MULTIVIEW')
             else:
@@ -294,21 +328,31 @@ def caption_images(args):
         )
         
         if caption:
-            # Simple format: {image: caption}
-            results[key] = caption
+            # Save with dataset ID as key (e.g., "nat_001": "caption...")
+            results[image_key] = caption
             
             # Save after each successful caption
             with open(args.output_path, 'w') as f:
                 json.dump(results, f, indent=2)
         else:
-            print(f"Failed to generate caption for {key}")
-    # Always write results at the end, even if empty or failures
+            print(f"Failed to generate caption for {image_key}")
+    
+    # Cleanup temporary files
+    for temp_file in temp_files:
+        try:
+            os.unlink(temp_file)
+        except Exception:
+            pass
+    
+    # Always write results at the end
     try:
         with open(args.output_path, 'w') as f:
             json.dump(results, f, indent=2)
     except Exception as e:
         print(f"Error writing results to {args.output_path}: {e}")
+    
     print(f"Captioning complete! Results saved to {args.output_path}")
+    print(f"Total captions: {len(results)}")
     elapsed = time.time() - start_time
     _mins, _secs = divmod(int(elapsed), 60)
     _hours, _mins = divmod(_mins, 60)
@@ -316,20 +360,24 @@ def caption_images(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate captions for images using LLM")
+    parser = argparse.ArgumentParser(description="Generate captions for Borise/CaptionQA dataset")
     
-    # Input/Output arguments
-    parser.add_argument("--benchmark-folder", type=str, default="images",
-                       help="Folder containing images or image folders")
+    # Dataset configuration
+    parser.add_argument("--dataset", type=str, default="Borise/CaptionQA",
+                       help="HuggingFace dataset name (default: Borise/CaptionQA)")
+    parser.add_argument("--split", type=str, default="all",
+                       choices=["natural", "document", "ecommerce", "embodiedai", "all"],
+                       help="Domain split to caption (default: natural)")
+    
+    # Output configuration
     parser.add_argument("--output-dir", type=str, required=True,
-                       help="Directory to save outputs to. Output file becomes: OUTPUT_DIR/prompt.lower()/_joined_model.json")
+                       help="Directory to save outputs to. Output file becomes: OUTPUT_DIR/prompt.lower()/model.json")
     
     # Prompt configuration
     parser.add_argument("--prompt", type=str, default="SIMPLE",
                        help="Prompt to use (e.g., SIMPLE, DETAILED, TECHNICAL, ARTISTIC, etc.)")
-    
     parser.add_argument("--taxonomy", type=str, default=None,
-                       help="Path to taxonomy JSON file (optional, uses built-in taxonomy if not provided)")
+                       help="Path to taxonomy JSON file (optional)")
     
     # Model configuration
     parser.add_argument("--model", type=str, default="gpt-4o",
@@ -355,6 +403,11 @@ def main():
     
     args = parser.parse_args()
     
+    # List prompts if requested
+    if args.list_prompts:
+        list_available_prompts()
+        return
+    
     # Derive output path from --output-dir
     model_safe = "_".join((args.model or "").split("/"))
     out_dir = os.path.join(args.output_dir, (args.prompt or "").lower())
@@ -362,79 +415,9 @@ def main():
     args.output_path = os.path.join(out_dir, f"{model_safe}.json")
     print(f"Saving outputs to {args.output_path}...")
     
-    # List prompts if requested
-    if args.list_prompts:
-        list_available_prompts()
-        return
-    
-    if not os.path.exists(args.benchmark_folder):
-        print(f"Error: Benchmark folder {args.benchmark_folder} does not exist")
-        return
-    
     # Run captioning
     caption_images(args)
 
+
 if __name__ == "__main__":
     main()
-'''
-Natural SIMPLE
-python caption.py \
-    --benchmark-folder ./data/natural_v0  \
-    --output-dir ./captions/natural \
-    --model Qwen/Qwen2.5-VL-32B-Instruct \
-    --vllm-server-url http://10.1.111.76:8006 \
-    --prompt SIMPLE \
-    --max-tokens 10000
-'''
-'''
-Natural LONG
-python caption.py \
-    --benchmark-folder ./data/natural_v0  \
-    --output-dir ./captions/natural \
-    --model Qwen/Qwen2.5-VL-32B-Instruct \
-    --vllm-server-url http://10.1.111.76:8006 \
-    --prompt LONG \
-    --max-tokens 10000
-'''
-'''
-Natural SHORT
-python caption.py \
-    --benchmark-folder ./data/natural_v0  \
-    --output-dir ./captions/natural \
-    --model Qwen/Qwen2.5-VL-32B-Instruct \
-    --vllm-server-url http://10.1.111.76:8006 \
-    --prompt SHORT
-'''
-'''
-Natural TAXONOMY_DEFAULT
-python caption.py \
-    --benchmark-folder ./data/natural_v0  \
-    --output-dir ./captions/natural \
-    --model Qwen/Qwen2.5-VL-32B-Instruct \
-    --vllm-server-url http://10.1.111.76:8006 \
-    --prompt TAXONOMY_DEFAULT \
-    --taxonomy ./general_taxonomy_v0.json \
-    --max-tokens 10000
-'''
-'''
-Natural TAXONOMY_STRUCTURED
-python caption.py \
-    --benchmark-folder ./data/natural_v0  \
-    --output-dir ./captions/natural \
-    --model Qwen/Qwen2.5-VL-32B-Instruct \
-    --vllm-server-url http://10.1.111.76:8006 \
-    --prompt TAXONOMY_STRUCTURED \
-    --taxonomy ./general_taxonomy_v0.json \
-    --max-tokens 10000
-'''
-'''
-EmbodiedAI TAXONOMY_STRUCTURED
-python caption.py \
-    --benchmark-folder ./data/embodied-ai_v0  \
-    --output-dir ./captions/embodied-ai \
-    --model Qwen/Qwen2.5-VL-32B-Instruct \
-    --vllm-server-url http://10.1.111.76:8006 \
-    --prompt TAXONOMY_STRUCTURED \
-    --taxonomy ./embodiedai_taxonomy_v0.json \
-    --max-tokens 10000
-'''

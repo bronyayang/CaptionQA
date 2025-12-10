@@ -1,17 +1,23 @@
 # CaptionQA: Is Your Caption as Useful as the Image Itself?
 
+<p align="center">
+  <a href="https://captionqa.github.io/website"><b>🏆 Leaderboard</b></a> •
+  <a href="https://huggingface.co/datasets/Borise/CaptionQA"><b>🤗 Dataset</b></a> •
+  <a href="https://arxiv.org/abs/2511.21025"><b>📄 Paper</b></a>
+</p>
+
 > A utility-based benchmark for measuring how well image captions preserve image-level information for real downstream tasks.
 
----
+
 
 ## 🔥 News
 
+- **[12/10/2025]** 🚀 Evaluation code cleaned and ready! Now fully compatible with HuggingFace dataset. Try it out and submit to our leaderboard!
 - **[11/27/2025]** 🎉 [ArXiv paper](https://arxiv.org/abs/2511.21025) released!
 - **[11/27/2025]** 📝 Blog post [English](https://huggingface.co/blog/Borise/rethinking-mm-from-industry-view) and [Chinese](https://zhuanlan.zhihu.com/p/1975613905834357034) released!
 - **[11/27/2025]** 📊 [Validation set](https://huggingface.co/datasets/Borise/CaptionQA) released on HuggingFace!
 - **[11/27/2025]** 💻 Draft code released! (Cleaning in progress - not yet compatible with HuggingFace dataset, meanwhile, please star our repo)
 
----
 
 ## 📎 Resources
 
@@ -21,88 +27,138 @@
 - 🤗 **Dataset on HuggingFace**: [Borise/CaptionQA](https://huggingface.co/datasets/Borise/CaptionQA)
 - 🏆 **Leaderboard**: [captionqa.github.io/website](https://captionqa.github.io/website)
 
----
 
 ## 🚀 Installation
 
 ### Prerequisites
-- Python 3.8+
-- API keys for the models you want to use (OpenAI, Google Gemini, or Anthropic Claude)
+
+Code is tested on **AMD MI325X** with the following Docker image:
+```
+rocm/vllm:rocm6.4.1_vllm_0.10.1_20250909
+```
+- ROCm 6.4.1
+- vLLM 0.10.1
 
 ### Setup
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/CaptionQA.git
+git clone https://github.com/bronyayang/CaptionQA.git
 cd CaptionQA
 ```
 
 2. **Install dependencies**
 ```bash
-pip install openai google-genai anthropic pillow tqdm transformers
+pip install datasets pillow tqdm transformers
 ```
 
-For vLLM support (optional):
+3. **Verify installation**
 ```bash
-pip install vllm
+python qa.py --caption-path example_captions/simple/Qwen_Qwen2.5-VL-3B-Instruct.json --output-path ./results/Qwen2.5-VL-3B-Instruct.json
 ```
 
-3. **Set up API keys**
+## 📊 Evaluation on CaptionQA Validation Set
 
-Set your API keys as environment variables:
+### Step 1: Generate Captions
+
+Generate captions for the validation set images. You can use:
+- Our provided `caption.py` script
+- Your own captioning code
+- Your own prompts
+
+As long as the output format matches this JSON structure:
+
+```json
+{
+  "nat_001": "A gray cat sitting on fallen leaves...",
+  "nat_002": "A forest path with autumn colors...",
+  "doc_001": "A document showing a table with...",
+  ...
+}
+```
+
+Where keys are the `id` field from the dataset (e.g., `nat_001`, `doc_042`).
+
+**Using our caption.py script:**
+
 ```bash
-export OPENAI_API_KEY="your-openai-api-key"
-export GOOGLE_API_KEY="your-google-api-key"  # For Gemini
-export ANTHROPIC_API_KEY="your-anthropic-api-key"  # For Claude
+python caption.py \
+    --output-dir ./example_captions \
+    --split all \
+    --model Qwen/Qwen2.5-VL-3B-Instruct \
+    --prompt SIMPLE
 ```
 
-4. **Verify installation**
+| Argument | Description |
+|----------|-------------|
+| `--output-dir` | Directory to save caption outputs |
+| `--split` | Domain split: `natural`, `document`, `ecommerce`, `embodiedai`, or `all` |
+| `--model` | Vision-language model for captioning |
+| `--prompt` | Caption prompt style (use `--list-prompts` to see options) |
+
+Output will be saved to: `./example_captions/<prompt_name>/<model_name>.json`
+
+### Step 2: Evaluate Captions
+
+Run QA evaluation using your generated captions:
+
 ```bash
-python caption.py --list-prompts
+python qa.py \
+    --caption-path ./example_captions/simple/Qwen_Qwen2.5-VL-3B-Instruct.json \
+    --output-path ./results/Qwen2.5-VL-3B-Instruct.json \
+    --split all
 ```
 
-> **Note**: The current code is under active development and is not yet fully compatible with the HuggingFace dataset format. Stay tuned for updates!
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `--caption-path` | Path to your caption JSON file |
+| `--output-path` | Path to save evaluation results |
+| `--split` | Domain split to evaluate (must match caption split) |
 
----
+### Step 3: View Results
+
+The evaluation outputs accuracy and score metrics:
+
+```
+============================================================
+Evaluation Results:
+============================================================
+Model: Qwen/Qwen2.5-72B-Instruct
+Total questions: 8492
+Correct answers: 4865 (57.29%)
+'Cannot answer' selections: 2566
+Total score: 5655.50 / 8492
+Average score: 0.6660
+============================================================
+```
+
+**Scoring Rules:**
+- ✅ Correct answer: **1.0 point**
+- ❌ Incorrect answer: **0.0 points**
+- 🤷 "Cannot answer from caption": **1/n_choices + 0.05 points**
+
 ## ✨ Leaderboard Submission (Full Benchmark Evaluation)
 
-### Step 1: Run your model on the public validation subset
+### Step 1: Test on validation set first
 
-This ensures:
+Run your model on the public validation set (see above) to ensure correct caption format and mapping.
 
-- correct caption format,
+### Step 2: Submit your caption file
 
-- correct mapping between image_id and caption,
+Send your caption JSON file (same format as validation set) to: **captionqa.team@gmail.com**
 
-- predictable caption length / style.
+```json
+{
+  "nat_001": "Your caption for image nat_001...",
+  "doc_001": "Your caption for image doc_001...",
+  ...
+}
+```
 
-### Step 2: Prepare your caption file
-Format can be JSONL or CSV, with the following fields:
+We will run full evaluation across all domains and return results within 3–5 days.
 
-| Field      | Description                           |
-| ---------- | ------------------------------------- |
-| `image_id` | The image identifier from the dataset |
-| `caption`  | Your model-generated caption          |
-
-
-### Step 3: Submit your captions
-Send your caption file to:
-
-captionqa.team@gmail.com
-
-We will run:
-
-- full taxonomy-aligned caption evaluation
-
-- all domain subsets
-
-- cross-domain utility metrics
-
-- final leaderboard aggregation
-
-Results are typically returned within 3–5 days, depending on queue time.
-
-### Step 4: Add your results to the leaderboard
+### Step 3: Add your results to the leaderboard
 
 Once you receive your evaluation results and are satisfied with them, add your model to the public leaderboard:
 
@@ -149,7 +205,7 @@ Once you receive your evaluation results and are satisfied with them, add your m
 - Existing leaderboard entries keep their numeric ranks (1, 2, 3...). New submissions use `-` and the table auto-sorts by Overall score
 
 <details>
-<summary><b>Optional but recommanded: Adding Category-Level Scores</b> (click to expand)</summary>
+<summary><b>Optional but recommended: Adding Category-Level Scores</b> (click to expand)</summary>
 
 If you want to add category-level scores to the "Per Domain" tabs, you'll need to add rows to each domain table. To add category scores, find the corresponding domain table in `index.html` and add a row to each domain table you want to include.
 
@@ -253,8 +309,6 @@ Search for `id="embodiedai-board"` in `index.html` and add this row:
 5. Submit a Pull Request to the leaderboard repository
 
 We will review and merge your PR, and your results will appear on the [public leaderboard](https://captionqa.github.io/website).
-
----
 
 ## 📚 Citation
 

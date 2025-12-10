@@ -1,20 +1,28 @@
 """
-QA Evaluation with Captions
+QA Evaluation with Captions using Borise/CaptionQA Dataset
 
 Evaluates questions using captions instead of images.
 Each question is answered once by an LLM using only the caption as context.
 
 Features:
+- Loads questions from Hugging Face dataset (Borise/CaptionQA)
+- Requires custom captions (from caption.py)
+- Uses Qwen2.5-72B-Instruct for evaluation
 - Adds "Cannot answer from the caption" option to non-yes/no questions
 - Automatic shuffling of answer choices (with order tracking)
-- Support for multiple model backends (OpenAI, Gemini, vLLM)
 
 Usage:
+    # Evaluate on a specific domain
     python qa.py \
         --caption-path captions.json \
-        --question-path document_gpt4o_level1.json \
         --output-path results.json \
-        --model gpt-4o
+        --split natural
+
+    # Evaluate on all domains
+    python qa.py \
+        --caption-path captions.json \
+        --output-path results.json \
+        --split all
 """
 
 import os
@@ -24,14 +32,17 @@ import argparse
 import random
 from typing import Dict, Any, List, Optional
 from tqdm import tqdm
-from pipeline.api import (
-    AMD_openai_client, AMD_openai_call,
-    AMD_gemini_client, AMD_gemini_call,
-    AMD_vllm_chat_client, AMD_vllm_text_chat_call
-)
+from datasets import load_dataset
+from pipeline.api import AMD_vllm_chat_client, AMD_vllm_text_chat_call
 
 LETTER_ALPH = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 CANNOT_ANSWER_TEXT = "Cannot answer from the caption"
+
+# Fixed model for evaluation
+EVAL_MODEL = "Qwen/Qwen2.5-72B-Instruct"
+
+# Available domain splits in the dataset
+DOMAIN_SPLITS = ["natural", "document", "ecommerce", "embodiedai"]
 
 # ---------- Helper Functions ----------
 
@@ -67,14 +78,16 @@ def extract_letter(answer_text: str, num_options: int) -> Optional[str]:
     return None
 
 
-def normalize_gt_letter(q: Dict[str, Any]) -> Optional[str]:
+def normalize_gt_letter(choices: List[str], answer: str) -> Optional[str]:
     """Extract ground truth answer letter from question.
     
-    Expects format: {"choices": [...], "answer": "exact option text"}
-    """
-    choices = q.get("choices", [])
-    answer = q.get("answer")
+    Args:
+        choices: List of choice strings
+        answer: The correct answer text
     
+    Returns:
+        Letter corresponding to the correct choice, or None if not found
+    """
     if not choices or not isinstance(answer, str):
         return None
     
@@ -86,7 +99,7 @@ def normalize_gt_letter(q: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def is_yesno_question(q: Dict[str, Any]) -> bool:
+def is_yesno_question(question_text: str, choices: List[str]) -> bool:
     """
     Check if question is a yes/no question.
     
@@ -95,14 +108,8 @@ def is_yesno_question(q: Dict[str, Any]) -> bool:
     2. The question starts with common yes/no question words (is/are, do/does/did, 
        have/has, can/could, will/would, should)
     """
-    choices = q.get("choices", [])
-    question_text = q.get("question", "").strip()
-    
     # Check if choices contain yes and no
-    choice_texts = []
-    for choice in choices:
-        text = choice.get("text") if isinstance(choice, dict) else str(choice)
-        choice_texts.append(text.strip().lower())
+    choice_texts = [str(c).strip().lower() for c in choices]
     
     has_yes = any("yes" in choice for choice in choice_texts)
     has_no = any("no" in choice for choice in choice_texts)
@@ -111,7 +118,7 @@ def is_yesno_question(q: Dict[str, Any]) -> bool:
         return True
     
     # Check if question starts with yes/no question words
-    question_lower = question_text.lower()
+    question_lower = question_text.strip().lower()
     yesno_starters = [
         "is ", "are ", "was ", "were ",
         "do ", "does ", "did ",
@@ -129,28 +136,17 @@ def is_yesno_question(q: Dict[str, Any]) -> bool:
     return False
 
 
-def add_cannot_answer_option(q: Dict[str, Any]) -> Dict[str, Any]:
+def add_cannot_answer_option(question_text: str, choices: List[str]) -> List[str]:
     """Add 'cannot answer from the caption' option to non-yes/no questions."""
-    if is_yesno_question(q):
-        return q
+    if is_yesno_question(question_text, choices):
+        return choices
     
-    q_copy = dict(q)
-    choices = q.get("choices", [])
-    q_copy["choices"] = choices + [CANNOT_ANSWER_TEXT]
-    
-    return q_copy
+    return choices + [CANNOT_ANSWER_TEXT]
 
 
-def build_caption_qa_prompt(caption: str, q: Dict[str, Any]) -> str:
+def build_caption_qa_prompt(caption: str, question: str, choices: List[str]) -> str:
     """Build prompt with caption and question."""
-    question = q["question"]
-    choices = q.get("choices", [])
-    
-    lines = []
-    for idx, choice in enumerate(choices):
-        letter = LETTER_ALPH[idx]
-        text = choice.get("text") if isinstance(choice, dict) else str(choice)
-        lines.append(f"{letter}. {text}")
+    lines = [f"{LETTER_ALPH[i]}. {choice}" for i, choice in enumerate(choices)]
     
     prompt = f"""Caption:
 {caption}
@@ -166,64 +162,24 @@ Answer:"""
     return prompt
 
 
-
-
-def detect_model_backend(model: str) -> str:
-    """Detect which API backend to use based on model name."""
-    model_lower = model.lower()
-    if 'gemini' in model_lower:
-        return 'gemini'
-    elif any(vllm_model in model_lower for vllm_model in ['qwen', 'llama', 'mistral', 'phi']):
-        return 'vllm'
-    else:
-        return 'openai'
-
-
-def call_text_model(
-    client: Any,
-    backend: str,
-    model: str,
-    prompt: str,
-    max_tokens: int = 4
-) -> Optional[str]:
-    """Call text model with appropriate backend."""
-    try:
-        if backend == 'gemini':
-            completion = AMD_gemini_call(
-                client,
-                model,
-                messages=prompt,
-                image_paths=[],  # No images for text-only
-                temperature=1.0
-            )
-            return completion.text.strip()
-        
-        elif backend == 'vllm':
-            result = AMD_vllm_text_chat_call(
-                client,
-                prompt,
-                temperature=0.0,
-                max_tokens=max_tokens
-            )
-            if isinstance(result, list) and len(result) > 0:
-                return result[0].strip()
-            return None
-        
-        else:  # OpenAI backend
-            messages = [{"role": "user", "content": prompt}]
-            completion = AMD_openai_call(
-                client,
-                model,
-                messages=messages,
-                temperature=1.0,
-                stream=False,
-                max_tokens=max_tokens
-            )
-            return completion.choices[0].message.content.strip()
+def load_captionqa_dataset(dataset_name: str, split: str):
+    """
+    Load CaptionQA dataset from HuggingFace.
     
-    except Exception as e:
-        print(f"[model_error] {e}")
-        return None
+    Args:
+        dataset_name: HuggingFace dataset name (default: "Borise/CaptionQA")
+        split: Domain split to use: "natural", "document", "ecommerce", "embodiedai", or "all"
+    
+    Returns:
+        HuggingFace dataset object
+    """
+    print(f"Loading dataset {dataset_name} (split: {split})...")
+    
+    # Load the specified split directly (including "all" which combines all domains)
+    dataset = load_dataset(dataset_name, split=split)
+    
+    print(f"Loaded {len(dataset)} entries")
+    return dataset
 
 
 # ---------- Main Evaluation Function ----------
@@ -234,28 +190,18 @@ def evaluate_qa_with_captions(args):
     Each question is answered once with shuffled choices.
     """
     
-    # Load captions
+    # Load dataset from HuggingFace
+    dataset = load_captionqa_dataset(args.dataset, args.split)
+    
+    # Load captions (required)
     print(f"Loading captions from {args.caption_path}...")
     with open(args.caption_path, "r", encoding="utf-8") as f:
         captions = json.load(f)
     print(f"Loaded {len(captions)} captions")
     
-    # Load questions
-    print(f"Loading questions from {args.question_path}...")
-    with open(args.question_path, "r", encoding="utf-8") as f:
-        questions_data = json.load(f)
-    print(f"Loaded questions for {len(questions_data)} images")
-    
-    # Initialize model client
-    backend = detect_model_backend(args.model)
-    print(f"Using {backend} backend for model {args.model}")
-    
-    if backend == 'gemini':
-        client = AMD_gemini_client()
-    elif backend == 'vllm':
-        client = AMD_vllm_chat_client(model=args.model)
-    else:
-        client = AMD_openai_client(model_id=args.model)
+    # Initialize vLLM client for Qwen2.5-72B-Instruct
+    print(f"Using model: {EVAL_MODEL}")
+    client = AMD_vllm_chat_client(model=EVAL_MODEL)
     
     # Setup RNG for shuffling
     rng = random.Random(args.seed)
@@ -263,49 +209,82 @@ def evaluate_qa_with_captions(args):
     # Prepare questions
     print("Preparing questions...")
     prompts: List[str] = []
-    meta: List[tuple] = []  # (img_key, q_idx, perm, n_opts, gt_idx_orig)
+    meta: List[tuple] = []  # (image_id, q_idx, perm, n_opts, gt_idx_orig, original_question_data)
     
-    images = list(questions_data.keys())
     skipped_no_caption = 0
     skipped_no_choices = 0
     
-    for img_key in images:
-        # Check if we have caption for this image
-        if img_key not in captions:
-            skipped_no_caption += 1
+    for entry in dataset:
+        # Get image identifier (e.g., "nat_001", "doc_042")
+        image_id = entry.get('id')
+        if image_id is None:
             continue
         
-        caption = captions[img_key]
+        # Use id directly as caption lookup key
+        image_key = str(image_id)
         
-        for q_idx, q in enumerate(questions_data[img_key]):
-            # Add "cannot answer" option for non-yes/no questions
-            q_with_option = add_cannot_answer_option(q)
+        # Get caption (required)
+        if image_key not in captions:
+            skipped_no_caption += 1
+            continue
+        caption = captions[image_key]
+        
+        # Get questions for this entry
+        questions = entry.get('questions', [])
+        if not questions:
+            # Single question format
+            if 'question' in entry:
+                cat = entry.get('category', [])
+                if isinstance(cat, list):
+                    cat = cat[0] if cat else ''
+                questions = [{
+                    'question': entry['question'],
+                    'choices': entry.get('choices', []),
+                    'answer': entry.get('answer'),
+                    'category': cat
+                }]
+            else:
+                continue
+        
+        for q_idx, q in enumerate(questions):
+            question_text = q.get('question', '')
+            choices = q.get('choices', [])
+            answer = q.get('answer')
+            # category can be a list or string
+            category = q.get('category', [])
+            if isinstance(category, list):
+                category = category[0] if category else ''
             
-            choices = q_with_option.get("choices", [])
             if not choices or len(choices) < 2:
                 skipped_no_choices += 1
                 continue
             
             # Get original ground truth
-            gt_letter_orig = normalize_gt_letter(q)
+            gt_letter_orig = normalize_gt_letter(choices, answer)
             if gt_letter_orig is None:
                 continue
             gt_idx_orig = LETTER_ALPH.index(gt_letter_orig)
             
+            # Add "cannot answer" option for non-yes/no questions
+            choices_with_option = add_cannot_answer_option(question_text, choices)
+            
             # Shuffle choices
-            n_opts = len(choices)
+            n_opts = len(choices_with_option)
             perm = list(range(n_opts))
             rng.shuffle(perm)
             
-            # Create shuffled question
-            q_shuffled = dict(q_with_option)
-            shuffled_opts = [choices[i] for i in perm]
-            q_shuffled["choices"] = shuffled_opts
+            # Create shuffled choices
+            shuffled_opts = [choices_with_option[i] for i in perm]
             
-            prompt = build_caption_qa_prompt(caption, q_shuffled)
+            prompt = build_caption_qa_prompt(caption, question_text, shuffled_opts)
             
             prompts.append(prompt)
-            meta.append((img_key, q_idx, perm, n_opts, gt_idx_orig))
+            meta.append((image_key, q_idx, perm, n_opts, gt_idx_orig, {
+                'question': question_text,
+                'choices': choices,
+                'answer': answer,
+                'category': category
+            }))
     
     print(f"Prepared {len(prompts)} questions")
     print(f"Skipped: {skipped_no_caption} (no caption), {skipped_no_choices} (no choices)")
@@ -348,45 +327,19 @@ def evaluate_qa_with_captions(args):
             f"| avg_score={existing_avg:.4f} | accuracy={existing_acc:.2%} | cannot_answer={existing_cannot}"
         )
 
-    # Determine which (img_key, q_idx) still need processing
+    # Determine which (image_key, q_idx) still need processing
     indices_to_process = []
-    for i, (img_key, q_idx, _perm, _n_opts, _gt_idx_orig) in enumerate(meta):
-        done = processed_count.get(img_key, 0)
+    for i, (image_key, q_idx, _perm, _n_opts, _gt_idx_orig, _q_data) in enumerate(meta):
+        done = processed_count.get(image_key, 0)
         if q_idx >= done:
             indices_to_process.append(i)
 
     total_remaining = len(indices_to_process)
-    already_done = sum(processed_count.get(k, 0) for k in images)
-    print(f"Already processed: {already_done}; remaining: {total_remaining}")
+    print(f"Already processed: {len(prompts) - total_remaining}; remaining: {total_remaining}")
 
     if total_remaining == 0:
         # Print summary from existing results and exit
-        total_questions = sum(len(v) for v in results.values())
-        total_score = sum(sum(item.get("score", 0.0) for item in v) for v in results.values())
-        correct_answers = sum(
-            sum(1 for item in v if item.get("is_correct")) for v in results.values()
-        )
-        cannot_answer_count = sum(
-            sum(1 for item in v if item.get("is_cannot_answer")) for v in results.values()
-        )
-        overall_accuracy = correct_answers / total_questions if total_questions > 0 else 0.0
-        average_score = total_score / total_questions if total_questions > 0 else 0.0
-
-        print(f"\n{'='*60}")
-        print(f"Evaluation Results:")
-        print(f"{'='*60}")
-        print(f"Model: {args.model}")
-        print(f"Total questions: {total_questions}")
-        print(f"Correct answers: {correct_answers} ({overall_accuracy:.2%})")
-        print(f"'Cannot answer' selections: {cannot_answer_count}")
-        print(f"Total score: {total_score:.2f} / {total_questions}")
-        print(f"Average score: {average_score:.4f}")
-        print(f"{'='*60}")
-        print(f"\nScoring rules:")
-        print(f"  - Correct answer: 1.0 point")
-        print(f"  - Incorrect answer: 0.0 points")
-        print(f"  - 'Cannot answer': 1/n_choices + 0.05 points")
-        print(f"{'='*60}")
+        print_final_summary(results)
         return
 
     # Ensure output directory exists
@@ -398,35 +351,25 @@ def evaluate_qa_with_captions(args):
         idxs = indices_to_process[start:start + batch_size]
         batch_prompts = [prompts[i] for i in idxs]
 
-        # Collect responses for this batch
-        batch_responses: List[str] = []
-        if backend == 'vllm':
-            outs = AMD_vllm_text_chat_call(
-                client,
-                batch_prompts,
-                temperature=0.0,
-                max_tokens=args.max_tokens,
-                n=1,
-                return_all=False,
-                use_tqdm=False,
-                system=system_prompt,
-            )
-            if outs and isinstance(outs, list) and len(outs) > 0 and isinstance(outs[0], list):
-                batch_responses = [lst[0] if lst else "" for lst in outs]
-            else:
-                batch_responses = [o if isinstance(o, str) else "" for o in (outs or [])]
+        # Collect responses using vLLM
+        outs = AMD_vllm_text_chat_call(
+            client,
+            batch_prompts,
+            temperature=0.0,
+            max_tokens=args.max_tokens,
+            n=1,
+            return_all=False,
+            use_tqdm=False,
+            system=system_prompt,
+        )
+        if outs and isinstance(outs, list) and len(outs) > 0 and isinstance(outs[0], list):
+            batch_responses = [lst[0] if lst else "" for lst in outs]
         else:
-            for p in tqdm(batch_prompts, desc=f"Evaluating {start+1}-{start+len(idxs)}/{total_remaining}"):
-                full_prompt = f"{system_prompt}\n\n{p}"
-                r = call_text_model(
-                    client, backend, args.model, full_prompt,
-                    max_tokens=args.max_tokens
-                )
-                batch_responses.append(r or "")
+            batch_responses = [o if isinstance(o, str) else "" for o in (outs or [])]
 
         # Score and append results for this batch
         for resp, i in zip(batch_responses, idxs):
-            img_key, q_idx, perm, n_opts, gt_idx_orig = meta[i]
+            image_key, q_idx, perm, n_opts, gt_idx_orig, q_data = meta[i]
 
             letter = extract_letter(resp, n_opts)
             is_correct = False
@@ -434,20 +377,17 @@ def evaluate_qa_with_captions(args):
             model_answer_text = None
             score = 0.0
 
+            original_choices = q_data['choices']
+            n_original_choices = len(original_choices)
+            choices_with_option = add_cannot_answer_option(q_data['question'], original_choices)
+
             if letter is not None:
                 shuf_idx = LETTER_ALPH.find(letter)
                 if 0 <= shuf_idx < len(perm):
                     orig_idx = perm[shuf_idx]
 
-                    q = questions_data[img_key][q_idx]
-                    q_with_option = add_cannot_answer_option(q)
-                    choices = q_with_option.get("choices", [])
-                    original_choices = q.get("choices", [])
-                    n_original_choices = len(original_choices)
-
-                    if orig_idx < len(choices):
-                        choice = choices[orig_idx]
-                        model_answer_text = choice.get("text") if isinstance(choice, dict) else str(choice)
+                    if orig_idx < len(choices_with_option):
+                        model_answer_text = str(choices_with_option[orig_idx])
 
                         if model_answer_text == CANNOT_ANSWER_TEXT:
                             is_cannot_answer = True
@@ -458,28 +398,28 @@ def evaluate_qa_with_captions(args):
                         else:
                             score = 0.0
 
-            if img_key not in results:
-                results[img_key] = []
+            if image_key not in results:
+                results[image_key] = []
 
-            q = questions_data[img_key][q_idx]
             result_entry = {
-                "question": q["question"],
-                "choices": q.get("choices", []),
-                "ground_truth": q.get("answer"),
+                "question": q_data['question'],
+                "choices": q_data['choices'],
+                "ground_truth": q_data['answer'],
                 "model_answer": model_answer_text,
                 "model_response": resp,
                 "is_correct": is_correct,
                 "is_cannot_answer": is_cannot_answer,
                 "score": round(score, 4),
-                "category": q.get("category", "")
+                "category": q_data.get('category', '')
             }
-            results[img_key].append(result_entry)
+            results[image_key].append(result_entry)
 
         # Save after each batch
         with open(args.output_path, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         print(f"Saved {sum(len(v) for v in results.values())} results -> {args.output_path}")
-        # Print running totals including loaded + this batch
+        
+        # Print running totals
         running_total = sum(len(v) for v in results.values())
         running_total_score = sum(sum(item.get("score", 0.0) for item in v) for v in results.values())
         running_correct = sum(
@@ -494,10 +434,13 @@ def evaluate_qa_with_captions(args):
             f"[progress] processed={running_total} | total_score={running_total_score:.2f} "
             f"| avg_score={running_avg:.4f} | accuracy={running_acc:.2%} | cannot_answer={running_cannot}"
         )
-        # if running_total >= 500:
-        #     break
 
-    # Final summary computed from all saved results
+    # Final summary
+    print_final_summary(results)
+
+
+def print_final_summary(results: Dict[str, List]):
+    """Print final evaluation summary."""
     total_questions = sum(len(v) for v in results.values())
     total_score = sum(sum(item.get("score", 0.0) for item in v) for v in results.values())
     correct_answers = sum(
@@ -512,7 +455,7 @@ def evaluate_qa_with_captions(args):
     print(f"\n{'='*60}")
     print(f"Evaluation Results:")
     print(f"{'='*60}")
-    print(f"Model: {args.model}")
+    print(f"Model: {EVAL_MODEL}")
     print(f"Total questions: {total_questions}")
     print(f"Correct answers: {correct_answers} ({overall_accuracy:.2%})")
     print(f"'Cannot answer' selections: {cannot_answer_count}")
@@ -528,20 +471,23 @@ def evaluate_qa_with_captions(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Evaluate questions using captions instead of images"
+        description="Evaluate questions using captions with Borise/CaptionQA dataset (using Qwen2.5-72B-Instruct)"
     )
     
-    # Input/Output
+    # Dataset configuration
+    parser.add_argument("--dataset", type=str, default="Borise/CaptionQA",
+                       help="HuggingFace dataset name (default: Borise/CaptionQA)")
+    parser.add_argument("--split", type=str, default="all",
+                       choices=["natural", "document", "ecommerce", "embodiedai", "all"],
+                       help="Domain split to evaluate (default: all)")
+    
+    # Caption source (required)
     parser.add_argument("--caption-path", type=str, required=True,
                        help="Path to caption JSON file ({img_key: caption})")
-    parser.add_argument("--question-path", type=str, required=True,
-                       help="Path to question JSON file ({img_key: [{question, choices, answer}, ...]})")
+    
+    # Output
     parser.add_argument("--output-path", type=str, required=True,
                        help="Path to save evaluation results")
-    
-    # Model configuration
-    parser.add_argument("--model", type=str, required=True,
-                       help="Model to use for evaluation (e.g., gpt-4o, llama-3.1-8b-instruct)")
     
     # Evaluation parameters
     parser.add_argument("--max-tokens", type=int, default=4,
@@ -550,15 +496,12 @@ def main():
                        help="Random seed for option shuffling (default: 0)")
     parser.add_argument("--save-every", type=int, default=50,
                        help="Save incremental results every N questions (default: 50)")
+    
     args = parser.parse_args()
     
     # Validate inputs
     if not os.path.exists(args.caption_path):
         print(f"Error: Caption file {args.caption_path} does not exist")
-        return
-    
-    if not os.path.exists(args.question_path):
-        print(f"Error: Question file {args.question_path} does not exist")
         return
     
     evaluate_qa_with_captions(args)
