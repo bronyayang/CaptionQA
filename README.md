@@ -11,7 +11,7 @@
 
 
 ## 🔥 News
-
+- **[1/19/2026]** 🎉 CaptionQA is now integrated into [lmms-eval](https://github.com/EvolvingLMMs-Lab/lmms-eval/tree/main/lmms_eval/tasks/captionqa)! Evaluate your VLMs with a single command using the official benchmark framework.
 - **[12/10/2025]** 🚀 Evaluation code cleaned and ready! Now fully compatible with HuggingFace dataset. Try it out and submit to our leaderboard!
 - **[11/27/2025]** 🎉 [ArXiv paper](https://arxiv.org/abs/2511.21025) released!
 - **[11/27/2025]** 📝 Blog post [English](https://huggingface.co/blog/Borise/rethinking-mm-from-industry-view) and [Chinese](https://zhuanlan.zhihu.com/p/1975613905834357034) released!
