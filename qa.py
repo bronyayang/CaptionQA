@@ -30,6 +30,7 @@ import json
 import re
 import argparse
 import random
+from collections import defaultdict
 from typing import Dict, Any, List, Optional
 from tqdm import tqdm
 from datasets import load_dataset
@@ -440,15 +441,32 @@ def evaluate_qa_with_captions(args):
 
 
 def print_final_summary(results: Dict[str, List]):
-    """Print final evaluation summary."""
-    total_questions = sum(len(v) for v in results.values())
-    total_score = sum(sum(item.get("score", 0.0) for item in v) for v in results.values())
-    correct_answers = sum(
-        sum(1 for item in v if item.get("is_correct")) for v in results.values()
-    )
-    cannot_answer_count = sum(
-        sum(1 for item in v if item.get("is_cannot_answer")) for v in results.values()
-    )
+    """Print final evaluation summary with per-category breakdown."""
+    total_questions = 0
+    total_score = 0.0
+    correct_answers = 0
+    cannot_answer_count = 0
+
+    category_total = defaultdict(int)
+    category_correct = defaultdict(int)
+    category_scores = defaultdict(list)
+    category_cannot = defaultdict(int)
+
+    for v in results.values():
+        for item in v:
+            total_questions += 1
+            score = item.get("score", 0.0)
+            total_score += score
+            cat = item.get("category", "") or "unknown"
+            category_total[cat] += 1
+            category_scores[cat].append(score)
+            if item.get("is_correct"):
+                correct_answers += 1
+                category_correct[cat] += 1
+            if item.get("is_cannot_answer"):
+                cannot_answer_count += 1
+                category_cannot[cat] += 1
+
     overall_accuracy = correct_answers / total_questions if total_questions > 0 else 0.0
     average_score = total_score / total_questions if total_questions > 0 else 0.0
 
@@ -456,16 +474,22 @@ def print_final_summary(results: Dict[str, List]):
     print(f"Evaluation Results:")
     print(f"{'='*60}")
     print(f"Model: {EVAL_MODEL}")
-    print(f"Total questions: {total_questions}")
-    print(f"Correct answers: {correct_answers} ({overall_accuracy:.2%})")
-    print(f"'Cannot answer' selections: {cannot_answer_count}")
-    print(f"Total score: {total_score:.2f} / {total_questions}")
-    print(f"Average score: {average_score:.4f}")
-    print(f"{'='*60}")
-    print(f"\nScoring rules:")
-    print(f"  - Correct answer: 1.0 point")
-    print(f"  - Incorrect answer: 0.0 points")
-    print(f"  - 'Cannot answer': 1/n_choices + 0.05 points")
+
+    if len(category_total) > 1:
+        print(f"\nPer-Category Results:")
+        for cat in sorted(category_total.keys()):
+            n = category_total[cat]
+            cat_score = sum(category_scores[cat]) / n if n else 0.0
+            cat_acc = category_correct[cat] / n if n else 0.0
+            cat_cannot = category_cannot[cat] / n if n else 0.0
+            print(f"  {cat} ({n}q): score={cat_score:.4f}, acc={cat_acc:.2%}, cannot_answer={cat_cannot:.2%}")
+
+    print(f"\nOverall:")
+    print(f"  Total questions: {total_questions}")
+    print(f"  Correct answers: {correct_answers} ({overall_accuracy:.2%})")
+    print(f"  'Cannot answer' selections: {cannot_answer_count}")
+    print(f"  Total score: {total_score:.2f} / {total_questions}")
+    print(f"  Average score: {average_score:.4f}")
     print(f"{'='*60}")
 
 
